@@ -1,0 +1,634 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Spaceship Shooter</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: black;
+        }
+
+        canvas {
+            display: block;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        /* Neon stars animation */
+        .stars {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: -1;
+        }
+
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            opacity: 0.5;
+            animation: twinkling 5s infinite;
+        }
+
+        /* Neon colors for stars */
+        .star-pink {
+            background: #ff6eff; /* Bright Neon Pink */
+        }
+
+        .star-purple {
+            background: #b15eff; /* Bright Neon Purple */
+        }
+
+        .star-blue {
+            background: #6e7fff; /* Bright Neon Blue */
+        }
+
+        @keyframes twinkling {
+            0% { opacity: 0; }
+            50% { opacity: 0.5; }
+            100% { opacity: 0; }
+        }
+
+        #gameTitle {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            color: white;
+            font-size: 24px;
+            font-family: 'Arial', sans-serif;
+            z-index: 100;
+        }
+
+        #gamepadIndicator {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: white;
+            font-size: 16px;
+            font-family: 'Arial', sans-serif;
+            z-index: 100;
+            display: none;
+        }
+    </style>
+</head>
+<body onmousedown="handleTouchStart(event)" ontouchstart="handleTouchStart(event)" onmousemove="handleTouchMove(event)" ontouchmove="handleTouchMove(event)" onmouseup="handleTouchEnd(event)" ontouchend="handleTouchEnd(event)">
+
+<canvas id="gameCanvas"></canvas>
+
+<!-- Neon stars -->
+<div class="stars" id="stars-container"></div>
+
+<!-- Game title -->
+<div id="gameTitle">Galactic Mayhem: Neon Skies</div>
+<div id="gamepadIndicator">Gamepad Connected</div>
+
+<script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const starsContainer = document.getElementById('stars-container');
+    const gamepadIndicator = document.getElementById('gamepadIndicator');
+
+    // Generate stars dynamically using JavaScript
+    function generateStars() {
+        const totalStars = 1000; // Adjust the number of stars as needed
+
+        for (let i = 0; i < totalStars; i++) {
+            const starElement = document.createElement('div');
+            const randomColor = Math.random() < 0.33 ? 'star-pink' : (Math.random() < 0.66 ? 'star-purple' : 'star-blue');
+
+            starElement.classList.add('star', randomColor);
+            starElement.style.top = Math.random() * 100 + '%';
+            starElement.style.left = Math.random() * 100 + '%';
+
+            starsContainer.appendChild(starElement);
+        }
+    }
+
+    generateStars();
+
+    // Spaceship
+    const spaceship = {
+        x: canvas.width / 2,
+        y: canvas.height - 70,
+        size: 40,
+        color: 'rgb(0, 191, 255)', // Deep Sky Blue
+        speed: 5,
+    };
+
+    // Enemy spaceships
+    const enemies = [];
+
+    // Enemy bullets
+    const enemyBullets = [];
+
+    // Bullets
+    const bullets = [];
+
+    // Score
+    let score = 0;
+
+    // Touch variables
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let isTouching = false;
+
+    // Game state
+    let isPaused = false;
+
+    // Draw player spaceship as a vector shape
+    function drawSpaceship() {
+        // Draw spaceship aura
+        ctx.beginPath();
+        ctx.arc(spaceship.x, spaceship.y, spaceship.size * 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = spaceship.color;
+        ctx.globalAlpha = 0.2;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        
+        // Draw spaceship body
+        ctx.save();
+        ctx.translate(spaceship.x, spaceship.y);
+        
+        // Main body
+        ctx.fillStyle = '#00BFFF'; // Deep Sky Blue
+        ctx.beginPath();
+        ctx.moveTo(0, -spaceship.size * 0.6);
+        ctx.lineTo(-spaceship.size * 0.4, spaceship.size * 0.4);
+        ctx.lineTo(-spaceship.size * 0.2, spaceship.size * 0.4);
+        ctx.lineTo(-spaceship.size * 0.15, spaceship.size * 0.6);
+        ctx.lineTo(spaceship.size * 0.15, spaceship.size * 0.6);
+        ctx.lineTo(spaceship.size * 0.2, spaceship.size * 0.4);
+        ctx.lineTo(spaceship.size * 0.4, spaceship.size * 0.4);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Cockpit
+        ctx.fillStyle = '#0080FF'; // Darker blue
+        ctx.beginPath();
+        ctx.ellipse(0, 0, spaceship.size * 0.2, spaceship.size * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Wings/Engines
+        ctx.fillStyle = '#00BFFF';
+        ctx.beginPath();
+        ctx.moveTo(-spaceship.size * 0.35, spaceship.size * 0.4);
+        ctx.lineTo(-spaceship.size * 0.5, spaceship.size * 0.7);
+        ctx.lineTo(-spaceship.size * 0.25, spaceship.size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(spaceship.size * 0.35, spaceship.size * 0.4);
+        ctx.lineTo(spaceship.size * 0.5, spaceship.size * 0.7);
+        ctx.lineTo(spaceship.size * 0.25, spaceship.size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Engine glow
+        ctx.fillStyle = '#00FFFF';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-spaceship.size * 0.25, spaceship.size * 0.7);
+        ctx.lineTo(-spaceship.size * 0.35, spaceship.size * 0.9);
+        ctx.lineTo(-spaceship.size * 0.15, spaceship.size * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(spaceship.size * 0.25, spaceship.size * 0.7);
+        ctx.lineTo(spaceship.size * 0.35, spaceship.size * 0.9);
+        ctx.lineTo(spaceship.size * 0.15, spaceship.size * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+
+    // Draw enemy spaceship as a vector shape
+    function drawEnemy(enemy) {
+        // Draw enemy aura
+        ctx.beginPath();
+        ctx.arc(enemy.x, enemy.y, enemy.size * 1.5, 0, Math.PI * 2);
+        ctx.fillStyle = enemy.color;
+        ctx.globalAlpha = 0.2;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        
+        // Enemy body
+        ctx.save();
+        ctx.translate(enemy.x, enemy.y);
+        
+        // Main body (pointing downward)
+        ctx.fillStyle = enemy.color;
+        ctx.beginPath();
+        ctx.moveTo(0, enemy.size * 0.6);
+        ctx.lineTo(-enemy.size * 0.4, -enemy.size * 0.4);
+        ctx.lineTo(-enemy.size * 0.2, -enemy.size * 0.4);
+        ctx.lineTo(-enemy.size * 0.15, -enemy.size * 0.6);
+        ctx.lineTo(enemy.size * 0.15, -enemy.size * 0.6);
+        ctx.lineTo(enemy.size * 0.2, -enemy.size * 0.4);
+        ctx.lineTo(enemy.size * 0.4, -enemy.size * 0.4);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Cockpit
+        ctx.fillStyle = enemy.color === 'rgb(0, 255, 0)' ? '#00CC00' : '#FF4500';
+        ctx.beginPath();
+        ctx.ellipse(0, 0, enemy.size * 0.2, enemy.size * 0.15, 0, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Wings/Engines
+        ctx.fillStyle = enemy.color;
+        ctx.beginPath();
+        ctx.moveTo(-enemy.size * 0.35, -enemy.size * 0.4);
+        ctx.lineTo(-enemy.size * 0.5, -enemy.size * 0.7);
+        ctx.lineTo(-enemy.size * 0.25, -enemy.size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(enemy.size * 0.35, -enemy.size * 0.4);
+        ctx.lineTo(enemy.size * 0.5, -enemy.size * 0.7);
+        ctx.lineTo(enemy.size * 0.25, -enemy.size * 0.7);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Engine glow
+        ctx.fillStyle = enemy.color === 'rgb(0, 255, 0)' ? '#00FF00' : '#FF6347';
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(-enemy.size * 0.25, -enemy.size * 0.7);
+        ctx.lineTo(-enemy.size * 0.35, -enemy.size * 0.9);
+        ctx.lineTo(-enemy.size * 0.15, -enemy.size * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.beginPath();
+        ctx.moveTo(enemy.size * 0.25, -enemy.size * 0.7);
+        ctx.lineTo(enemy.size * 0.35, -enemy.size * 0.9);
+        ctx.lineTo(enemy.size * 0.15, -enemy.size * 0.9);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    }
+
+    // Draw rocket/bullet as a vector shape
+    function drawRocket(x, y, size, isPlayer) {
+        ctx.save();
+        ctx.translate(x, y);
+        
+        // Rocket body
+        ctx.fillStyle = isPlayer ? '#FF0000' : '#00FF00';
+        ctx.beginPath();
+        ctx.moveTo(0, -size * 2);
+        ctx.lineTo(-size, size * 2);
+        ctx.lineTo(size, size * 2);
+        ctx.closePath();
+        ctx.fill();
+        
+        // Rocket flame
+        ctx.fillStyle = isPlayer ? '#FF4500' : '#00FF80';
+        ctx.beginPath();
+        ctx.moveTo(-size * 0.6, size * 2);
+        ctx.lineTo(0, size * 3);
+        ctx.lineTo(size * 0.6, size * 2);
+        ctx.closePath();
+        ctx.fill();
+        
+        ctx.restore();
+    }
+
+    // Enemy spaceships movement
+    function moveEnemySpaceships() {
+        enemies.forEach(enemy => {
+            enemy.x += enemy.speedX;
+            enemy.y += enemy.speedY;
+
+            if (enemy.x < 0 || enemy.x > canvas.width - enemy.size) {
+                enemy.speedX *= -1; // Change direction when hitting the canvas borders
+            }
+
+            if (enemy.y > canvas.height) {
+                // Reset enemy when it goes below the canvas
+                enemy.y = 0;
+                enemy.x = Math.random() * canvas.width;
+            }
+        });
+    }
+
+    function updateEnemies() {
+        moveEnemySpaceships();
+
+        enemies.forEach(enemy => {
+            // Hover effect
+            enemy.y += Math.sin(enemy.hoverCount) * 2;
+            enemy.hoverCount += 0.1;
+
+            // Enemy shooting logic
+            if (!isPaused && Math.random() < 0.02) {
+                enemyBullets.push({
+                    x: enemy.x,
+                    y: enemy.y + enemy.size / 2,
+                    speed: 5,
+                });
+            }
+        });
+    }
+
+    function drawEnemies() {
+        updateEnemies();
+
+        enemies.forEach(enemy => {
+            drawEnemy(enemy);
+
+            // Enemy shooting logic
+            if (!isPaused && Math.random() < 0.02) {
+                enemyBullets.push({
+                    x: enemy.x,
+                    y: enemy.y + enemy.size / 2,
+                    speed: 5,
+                });
+            }
+        });
+    }
+
+    function moveSpaceship(event) {
+        if (!isPaused) {
+            if (event.key === 'ArrowLeft' && spaceship.x > 0) {
+                spaceship.x -= spaceship.speed;
+            } else if (event.key === 'ArrowRight' && spaceship.x < canvas.width) {
+                spaceship.x += spaceship.speed;
+            } else if (event.key === 'ArrowUp' && spaceship.y > 0) {
+                spaceship.y -= spaceship.speed;
+            } else if (event.key === 'ArrowDown' && spaceship.y < canvas.height - spaceship.size) {
+                spaceship.y += spaceship.speed;
+            }
+        }
+    }
+
+    function shoot() {
+        bullets.push({
+            x: spaceship.x,
+            y: spaceship.y - 25,
+            speed: 8,
+        });
+    }
+
+    function update() {
+        if (!isPaused) {
+            bullets.forEach(bullet => {
+                bullet.y -= bullet.speed;
+            });
+
+            enemyBullets.forEach(bullet => {
+                bullet.y += bullet.speed;
+            });
+
+            enemies.forEach((enemy, enemyIndex) => {
+                enemy.y += enemy.speed;
+
+                if (
+                    enemy.x - enemy.size / 2 < spaceship.x + spaceship.size / 2 &&
+                    enemy.x + enemy.size / 2 > spaceship.x - spaceship.size / 2 &&
+                    enemy.y - enemy.size / 2 < spaceship.y + spaceship.size / 2 &&
+                    enemy.y + enemy.size / 2 > spaceship.y - spaceship.size / 2
+                ) {
+                    alert('Game Over!');
+                    location.reload();
+                }
+
+                bullets.forEach((bullet, bulletIndex) => {
+                    if (
+                        bullet.x > enemy.x - enemy.size / 2 &&
+                        bullet.x < enemy.x + enemy.size / 2 &&
+                        bullet.y > enemy.y - enemy.size / 2 &&
+                        bullet.y < enemy.y + enemy.size / 2
+                    ) {
+                        bullets.splice(bulletIndex, 1);
+                        enemy.color = 'rgb(255, 69, 0)';
+                        setTimeout(() => {
+                            enemy.color = 'rgb(0, 255, 0)';
+                        }, 100);
+                        setTimeout(() => {
+                            enemies.splice(enemyIndex, 1);
+                            score += 10;
+                        }, 200);
+                    }
+                });
+
+                enemyBullets.forEach((bullet, bulletIndex) => {
+                    if (
+                        bullet.x > spaceship.x - spaceship.size / 2 &&
+                        bullet.x < spaceship.x + spaceship.size / 2 &&
+                        bullet.y > spaceship.y - spaceship.size / 2 &&
+                        bullet.y < spaceship.y + spaceship.size / 2
+                    ) {
+                        alert('Game Over!');
+                        location.reload();
+                    }
+                });
+            });
+
+            bullets.forEach((bullet, index) => {
+                if (bullet.y < 0) {
+                    bullets.splice(index, 1);
+                }
+            });
+
+            enemyBullets.forEach((bullet, index) => {
+                if (bullet.y > canvas.height) {
+                    enemyBullets.splice(index, 1);
+                }
+            });
+
+            if (Math.random() < 0.02) {
+                enemies.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * -canvas.height,
+                    size: 40,
+                    speed: Math.random() * 2 + 2,
+                    hoverCount: Math.random() * Math.PI * 2,
+                    color: 'rgb(0, 255, 0)',
+                    speedX: Math.random() < 0.5 ? 2 : -2, // Added speedX for horizontal movement
+                    speedY: Math.random() * 2 + 2, // Added speedY for vertical movement
+                });
+            }
+        }
+    }
+
+    function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        drawSpaceship();
+        drawEnemies();
+        drawBullets();
+        drawEnemyBullets();
+        drawScore();
+        drawPauseText();
+    }
+
+    function drawBullets() {
+        bullets.forEach(bullet => {
+            drawRocket(bullet.x, bullet.y, 4, true);
+        });
+    }
+
+    function drawEnemyBullets() {
+        enemyBullets.forEach(bullet => {
+            drawRocket(bullet.x, bullet.y, 4, false);
+        });
+    }
+
+    function drawScore() {
+        ctx.fillStyle = 'white';
+        ctx.font = '20px Arial';
+        ctx.fillText('Score: ' + score, 20, 30);
+    }
+
+    function drawPauseText() {
+        if (isPaused) {
+            ctx.fillStyle = 'white';
+            ctx.font = '30px Arial';
+            ctx.fillText('Paused', canvas.width / 2 - 50, canvas.height / 2);
+        }
+    }
+
+    function gameLoop() {
+        update();
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Touch controls
+    function handleTouchStart(event) {
+        event.preventDefault();
+        isTouching = true;
+        const touch = event.touches ? event.touches[0] : event;
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+    }
+
+    function handleTouchMove(event) {
+        event.preventDefault();
+        if (!isTouching || isPaused) return;
+        
+        const touch = event.touches ? event.touches[0] : event;
+        const deltaX = touch.clientX - touchStartX;
+        const deltaY = touch.clientY - touchStartY;
+        
+        spaceship.x += deltaX;
+        spaceship.y += deltaY;
+        
+        // Keep spaceship within bounds
+        spaceship.x = Math.max(spaceship.size, Math.min(canvas.width - spaceship.size, spaceship.x));
+        spaceship.y = Math.max(spaceship.size, Math.min(canvas.height - spaceship.size, spaceship.y));
+        
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+    }
+
+    function handleTouchEnd(event) {
+        event.preventDefault();
+        isTouching = false;
+        // Shoot when touch ends
+        if (!isPaused) {
+            shoot();
+        }
+    }
+
+    // Keyboard controls
+    document.addEventListener('keydown', event => {
+        moveSpaceship(event);
+        if (event.key === ' ') {
+            shoot();
+        }
+        if (event.key === 'p' || event.key === 'P') {
+            isPaused = !isPaused;
+        }
+    });
+
+    // Gamepad handling
+    let gamepadIndex;
+    let gamepad;
+
+    function handleGamepad() {
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i] && gamepads[i].buttons[9].pressed) {
+                isPaused = !isPaused;
+            }
+            
+            if (gamepads[i] && gamepads[i].buttons[0].pressed) {
+                shoot();
+            }
+            
+            if (gamepads[i] && gamepads[i].axes) {
+                const xAxis = gamepads[i].axes[0];
+                const yAxis = gamepads[i].axes[1];
+                
+                if (Math.abs(xAxis) > 0.1) {
+                    spaceship.x += xAxis * spaceship.speed * 2;
+                }
+                
+                if (Math.abs(yAxis) > 0.1) {
+                    spaceship.y += yAxis * spaceship.speed * 2;
+                }
+                
+                // Keep spaceship within bounds
+                spaceship.x = Math.max(spaceship.size, Math.min(canvas.width - spaceship.size, spaceship.x));
+                spaceship.y = Math.max(spaceship.size, Math.min(canvas.height - spaceship.size, spaceship.y));
+            }
+        }
+    }
+
+    function checkGamepad() {
+        gamepadIndex = undefined;
+        gamepad = undefined;
+
+        const gamepads = navigator.getGamepads();
+        for (let i = 0; i < gamepads.length; i++) {
+            if (gamepads[i]) {
+                gamepadIndex = i;
+                gamepad = gamepads[i];
+                break;
+            }
+        }
+    }
+
+    window.addEventListener('gamepadconnected', (event) => {
+        console.log(`Gamepad connected at index ${event.gamepad.index}: ${event.gamepad.id}`);
+        gamepadIndicator.style.display = 'block';
+    });
+
+    window.addEventListener('gamepaddisconnected', (event) => {
+        console.log(`Gamepad disconnected from index ${event.gamepad.index}`);
+        gamepadIndicator.style.display = 'none';
+    });
+
+    function gamepadLoop() {
+        checkGamepad();
+        handleGamepad();
+        requestAnimationFrame(gamepadLoop);
+    }
+
+    // Start the game
+    gamepadLoop();
+    gameLoop();
+</script>
+
+</body>
+</html>
